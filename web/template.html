@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nifty 50 Red-Flag Screener</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  /* Forensic ledger: ink-blue accent on a cool paper grey, semantic red/amber/green for risk only. */
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --ink: #17202c;
+  --muted: #5d6878;
+  --line: #dde1e7;
+  --accent: #1f4e79;
+  --accent-soft: #e5edf5;
+  --high: #c0392b;
+  --high-soft: #fbe9e7;
+  --med: #b8730c;
+  --med-soft: #fdf1df;
+  --low: #2e7d4f;
+  --low-soft: #e5f3ea;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161d; --surface: #19202a; --ink: #e6eaf0; --muted: #98a3b3; --line: #2a3340;
+    --accent: #7fb0dd; --accent-soft: #1d2b3a;
+    --high: #ef7b6c; --high-soft: #3a1f1d; --med: #e9a94a; --med-soft: #382a15; --low: #6cc490; --low-soft: #17301f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161d; --surface: #19202a; --ink: #e6eaf0; --muted: #98a3b3; --line: #2a3340;
+  --accent: #7fb0dd; --accent-soft: #1d2b3a;
+  --high: #ef7b6c; --high-soft: #3a1f1d; --med: #e9a94a; --med-soft: #382a15; --low: #6cc490; --low-soft: #17301f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 28px 20px 60px; display: grid; gap: 22px; }
+header { display: grid; gap: 6px; }
+h1 { font: 700 30px/1.15 var(--font-display); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font: 600 20px/1.2 var(--font-display); margin: 0; text-wrap: balance; }
+h3 { font: 600 16px/1.3 var(--font-display); margin: 0; }
+.sub { color: var(--muted); max-width: 70ch; margin: 0; }
+.num, td.n { font-variant-numeric: tabular-nums; }
+nav { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+nav a { padding: 10px 14px; color: var(--muted); text-decoration: none; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+nav a:hover { color: var(--ink); }
+nav a[aria-current="page"] { color: var(--accent); border-color: var(--accent); }
+a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.view { display: none; gap: 18px; }
+.view.on { display: grid; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 2px; }
+.tile .k { color: var(--muted); font-size: 13px; }
+.tile .v { font: 600 26px/1.2 var(--font-display); font-variant-numeric: tabular-nums; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+td.n, th.n { text-align: right; }
+tbody tr.click { cursor: pointer; }
+tbody tr.click:hover { background: var(--accent-soft); }
+.co { font-weight: 600; }
+.sym { color: var(--muted); font: 12px var(--font-mono); }
+.pill { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.pill.High { background: var(--high-soft); color: var(--high); }
+.pill.Medium { background: var(--med-soft); color: var(--med); }
+.pill.Low { background: var(--low-soft); color: var(--low); }
+.pill.none { background: var(--line); color: var(--muted); }
+.scorebar { display: flex; align-items: center; gap: 8px; min-width: 110px; }
+.scorebar .track { flex: 1; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.scorebar .fill { height: 100%; border-radius: 3px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { font-size: 12px; padding: 2px 8px; border-radius: 4px; background: var(--high-soft); color: var(--high); white-space: nowrap; }
+.dash { color: var(--muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+label { font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+select, input[type=range] { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+select { min-width: min(320px, 100%); }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+svg text { fill: var(--muted); font: 11px var(--font-body); }
+svg .grid { stroke: var(--line); }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.banner { border-left: 3px solid var(--med); background: var(--med-soft); padding: 10px 14px; border-radius: 0 6px 6px 0; }
+.note { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 12px 14px; border-radius: 0 6px 6px 0; max-width: 85ch; }
+.grid-flags td.c { text-align: center; font-size: 13px; }
+.hit { color: var(--high); font-weight: 700; }
+.miss { color: var(--muted); }
+.rates { display: grid; gap: 10px; }
+.rate { display: grid; grid-template-columns: minmax(150px, 260px) 1fr; gap: 10px; align-items: center; font-size: 13px; }
+.rate .bars { display: grid; gap: 3px; }
+.rate .bar { height: 9px; border-radius: 2px; }
+.prose { max-width: 72ch; display: grid; gap: 10px; }
+.prose p, .prose ul { margin: 0; }
+.prose li { margin: 4px 0; }
+footer { color: var(--muted); font-size: 12px; }
+footer a { color: var(--accent); }
+@media (max-width: 600px) { h1 { font-size: 24px; } .rate { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Accounting Red-Flag Screener</h1>
+    <p class="sub">India's Nifty 50 non-financial companies, scored on warning signs in their published financials. A flag is a reason to dig deeper. It is not a verdict and not investment advice.</p>
+  </header>
+  <nav aria-label="Sections">
+    <a href="#screener" data-v="screener">Screener</a>
+    <a href="#company" data-v="company">Company deep-dive</a>
+    <a href="#backtest" data-v="backtest">Backtest on past blow-ups</a>
+    <a href="#method" data-v="method">Methodology</a>
+  </nav>
+
+  <section class="view" id="v-screener">
+    <div class="tiles" id="sc-tiles"></div>
+    <div class="card">
+      <div class="controls">
+        <label for="minscore">Minimum score <input type="range" id="minscore" min="0" value="0"> <b id="minscore-v" class="num">0</b></label>
+        <label for="riskf">Risk
+          <select id="riskf"><option value="">All</option><option>High</option><option>Medium</option><option>Low</option></select>
+        </label>
+      </div>
+      <div class="scroll"><table id="sc-table"></table></div>
+      <p class="sub" style="font-size:13px">Select a row to see that company's history. Score is the weighted count of flags raised. Low is 0 to 2, Medium 3 to 5, High 6 or more.</p>
+    </div>
+  </section>
+
+  <section class="view" id="v-company">
+    <div class="controls"><label for="cosel">Company <select id="cosel"></select></label></div>
+    <div id="co-banner"></div>
+    <div class="tiles" id="co-tiles"></div>
+    <div class="card"><h3>Red-flag score by year</h3><div id="co-score"></div></div>
+    <div class="two">
+      <div class="card"><h3>Profit vs operating cash flow (₹ crore)</h3><div id="co-cash"></div></div>
+      <div class="card"><h3>Debtor days and borrowings as % of assets</h3><div id="co-bal"></div></div>
+    </div>
+    <div class="card"><h3>Flag history</h3><div class="scroll"><table class="grid-flags" id="co-grid"></table></div></div>
+  </section>
+
+  <section class="view" id="v-backtest">
+    <p class="sub">Each blow-up is scored on the last annual numbers that were public before the event. Controls are today's Nifty 50 non-financials over the same years.</p>
+    <div class="tiles" id="bt-tiles"></div>
+    <div class="card"><div class="scroll"><table id="bt-table"></table></div></div>
+    <div class="card">
+      <h3>Which flags separate blow-ups from healthy companies?</h3>
+      <div class="legend"><span><i style="background:var(--high)"></i>Blow-ups</span><span><i style="background:var(--muted)"></i>Nifty controls</span></div>
+      <div class="rates" id="bt-rates"></div>
+    </div>
+    <div class="note">Read this result honestly. Twelve blow-ups is a small sample. Some thresholds were tuned while looking at these same cases, so the hit rate is partly in-sample. The controls are today's survivors. Frauds built on fabricated numbers, such as Manpasand and Vakrangee, can pass every ratio test, which is a known limit of screening published statements.</div>
+  </section>
+
+  <section class="view" id="v-method">
+    <div class="card"><h2>The flags</h2><div class="scroll"><table id="m-flags"></table></div></div>
+    <div class="card prose" id="m-text"></div>
+  </section>
+
+  <footer>Data: screener.in annual statements, snapshot of November 2026, figures in ₹ crore. Source code: <a href="https://github.com/Parzival-code-ui/red-flag-screener">github.com/Parzival-code-ui/red-flag-screener</a></footer>
+</div>
+
+<script>
+const D = /*__DATA__*/null;
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const FL = Object.fromEntries(D.flags.map((f) => [f.key, f]));
+const BY = Object.fromEntries(D.companies.map((c) => [c.symbol, c]));
+const last = (c) => c.years[c.years.length - 1];
+const fmt = (v, d = 2) => (v === null || v === undefined ? "–" : Number(v).toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d }));
+const riskColor = (r) => (r === "High" ? "var(--high)" : r === "Medium" ? "var(--med)" : r === "Low" ? "var(--low)" : "var(--muted)");
+const pill = (r) => (r ? `<span class="pill ${r}">${r}</span>` : `<span class="pill none">Too little data</span>`);
+const raised = (y) => D.flags.filter((f) => y.flags[f.key] === true);
+const chips = (y) => { const r = raised(y); return r.length ? `<div class="chips">${r.map((f) => `<span class="chip">${esc(f.label)}</span>`).join("")}</div>` : `<span class="dash">None</span>`; };
+const scorebar = (y) => `<div class="scorebar"><div class="track"><div class="fill" style="width:${(y.score / D.maxScore) * 100}%;background:${riskColor(y.risk)}"></div></div><b class="num">${y.score}</b></div>`;
+const tile = (k, v) => `<div class="tile"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+let current = "INDIGO";
+
+/* ---------- screener ---------- */
+const nifty = D.companies.filter((c) => c.nifty).map((c) => ({ c, y: last(c) }));
+function renderScreener() {
+  const counts = { High: 0, Medium: 0 };
+  nifty.forEach(({ y }) => { if (counts[y.risk] !== undefined) counts[y.risk]++; });
+  $("#sc-tiles").innerHTML = tile("Companies screened", nifty.length) + tile("High risk", counts.High) + tile("Medium risk", counts.Medium) + tile("Latest fiscal year", "FY" + Math.max(...nifty.map(({ y }) => y.fy)));
+  const min = +$("#minscore").value, rf = $("#riskf").value;
+  $("#minscore-v").textContent = min;
+  const rows = nifty.filter(({ y }) => y.score >= min && (!rf || y.risk === rf))
+    .sort((a, b) => b.y.score - a.y.score || a.c.name.localeCompare(b.c.name));
+  $("#sc-table").innerHTML = `<thead><tr><th>Company</th><th>Score</th><th>Risk</th><th>Flags raised</th><th class="n">CFO / PAT 3y</th><th class="n">Beneish M</th><th class="n">Altman Z''</th><th class="n">Promoter Δ 2y</th></tr></thead><tbody>` +
+    (rows.length ? rows.map(({ c, y }) => `<tr class="click" tabindex="0" data-s="${esc(c.symbol)}"><td><div class="co">${esc(c.name)}</div><div class="sym">${esc(c.symbol)} · FY${y.fy}</div></td><td>${scorebar(y)}</td><td>${pill(y.risk)}</td><td>${chips(y)}</td><td class="n">${fmt(y.cfo_to_pat_3y)}</td><td class="n">${fmt(y.beneish_m)}</td><td class="n">${fmt(y.altman_z)}</td><td class="n">${y.promoter_change_2y === null ? "–" : fmt(y.promoter_change_2y, 1) + " pp"}</td></tr>`).join("")
+      : `<tr><td colspan="8" class="dash">No companies match these filters. Lower the minimum score or pick another risk level.</td></tr>`) + "</tbody>";
+}
+$("#minscore").max = D.maxScore;
+$("#minscore").addEventListener("input", renderScreener);
+$("#riskf").addEventListener("change", renderScreener);
+$("#sc-table").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-s]"); if (tr) openCompany(tr.dataset.s); });
+$("#sc-table").addEventListener("keydown", (e) => { const tr = e.target.closest("tr[data-s]"); if (tr && e.key === "Enter") openCompany(tr.dataset.s); });
+
+/* ---------- charts (SVG) ---------- */
+function niceMax(v) { if (v <= 0) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p; return 10 * p; }
+function ticks(lo, hi, n = 4) { const out = []; for (let i = 0; i <= n; i++) out.push(lo + ((hi - lo) * i) / n); return out; }
+const short = (v) => Math.abs(v) >= 100000 ? (v / 100000).toFixed(1) + "L" : Math.abs(v) >= 1000 ? (v / 1000).toFixed(Math.abs(v) >= 10000 ? 0 : 1) + "k" : Math.round(v).toString();
+
+function barChart(el, years) {
+  const W = 760, H = 210, L = 30, R = 10, T = 12, B = 26, iw = W - L - R, ih = H - T - B;
+  const bw = iw / years.length, y = (v) => T + ih - (v / D.maxScore) * ih;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Score by year">`;
+  [0, 4, 8, 12].forEach((t) => { s += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${t}</text>`; });
+  s += `<line x1="${L}" x2="${W - R}" y1="${y(D.alertScore)}" y2="${y(D.alertScore)}" stroke="var(--med)" stroke-dasharray="4 3"/>`;
+  years.forEach((d, i) => {
+    const x = L + i * bw + bw * 0.18, w = bw * 0.64, h = Math.max((d.score / D.maxScore) * ih, d.score ? 2 : 0);
+    s += `<rect x="${x}" y="${T + ih - h}" width="${w}" height="${h}" rx="2" fill="${riskColor(d.risk)}"><title>FY${d.fy}: score ${d.score}</title></rect>`;
+    if (d.score) s += `<text x="${x + w / 2}" y="${T + ih - h - 4}" text-anchor="middle" style="fill:var(--ink)">${d.score}</text>`;
+    s += `<text x="${x + w / 2}" y="${H - 8}" text-anchor="middle">${"’" + String(d.fy).slice(2)}</text>`;
+  });
+  el.innerHTML = s + `</svg><div class="legend"><span><i style="background:var(--low)"></i>Low</span><span><i style="background:var(--med)"></i>Medium</span><span><i style="background:var(--high)"></i>High</span><span><i style="background:none;border-top:2px dashed var(--med);height:0;border-radius:0"></i>Alert line (score ${D.alertScore})</span></div>`;
+}
+
+function lineChart(el, years, series, fmtY = short) {
+  const W = 380, H = 220, L = 44, R = 10, T = 12, B = 26, iw = W - L - R, ih = H - T - B;
+  const vals = series.flatMap((sr) => years.map((d) => d[sr.key]).filter((v) => v !== null));
+  if (!vals.length) { el.innerHTML = `<p class="dash">No data for this company.</p>`; return; }
+  const rawLo = Math.min(0, ...vals), rawHi = Math.max(...vals, 1);
+  const step = niceMax((rawHi - rawLo) / 4);
+  const lo = Math.floor(rawLo / step) * step, hi = Math.ceil(rawHi / step) * step;
+  const tickVals = []; for (let t = lo; t <= hi + step / 2; t += step) tickVals.push(t);
+  const x = (i) => L + (years.length === 1 ? iw / 2 : (i * iw) / (years.length - 1)), y = (v) => T + ih - ((v - lo) / (hi - lo)) * ih;
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img">`;
+  tickVals.forEach((t) => { s += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}"/><text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${fmtY(t)}</text>`; });
+  if (lo < 0) s += `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" stroke="var(--muted)"/>`;
+  const every = Math.ceil(years.length / 7);
+  years.forEach((d, i) => { if (i % every === 0 || i === years.length - 1) s += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${"’" + String(d.fy).slice(2)}</text>`; });
+  series.forEach((sr) => {
+    const pts = years.map((d, i) => (d[sr.key] === null ? null : [x(i), y(d[sr.key]), d])).filter(Boolean);
+    if (!pts.length) return;
+    s += `<polyline fill="none" stroke="${sr.color}" stroke-width="2" points="${pts.map((p) => p[0] + "," + p[1]).join(" ")}"/>`;
+    pts.forEach((p, j) => { s += `<circle cx="${p[0]}" cy="${p[1]}" r="${j === pts.length - 1 ? 4 : 2.5}" fill="${sr.color}"><title>FY${p[2].fy} ${sr.label}: ${fmt(p[2][sr.key], 0)}</title></circle>`; });
+  });
+  el.innerHTML = s + `</svg><div class="legend">${series.map((sr) => `<span><i style="background:${sr.color}"></i>${sr.label}</span>`).join("")}</div>`;
+}
+
+/* ---------- company ---------- */
+const options = [...D.companies].sort((a, b) => (a.nifty === b.nifty ? a.name.localeCompare(b.name) : a.nifty ? -1 : 1));
+$("#cosel").innerHTML = `<optgroup label="Nifty 50">${options.filter((c) => c.nifty).map((c) => `<option value="${esc(c.symbol)}">${esc(c.name)} (${esc(c.symbol)})</option>`).join("")}</optgroup><optgroup label="Past blow-ups">${options.filter((c) => !c.nifty).map((c) => `<option value="${esc(c.symbol)}">${esc(c.name)}</option>`).join("")}</optgroup>`;
+$("#cosel").addEventListener("change", (e) => { current = e.target.value; renderCompany(); });
+
+function renderCompany() {
+  const c = BY[current], y = last(c);
+  $("#cosel").value = current;
+  $("#co-banner").innerHTML = c.blowup ? `<div class="banner"><b>${esc(c.blowup.event)}.</b> The backtest scores this company on FY${c.blowup.test_fy} numbers.</div>` : "";
+  $("#co-tiles").innerHTML = tile(`Score, FY${y.fy}`, `${y.score} / ${D.maxScore}`) + tile("Risk", pill(y.risk)) + tile("CFO / PAT (3y)", fmt(y.cfo_to_pat_3y)) + tile("Beneish M", fmt(y.beneish_m)) + tile("Altman Z''", fmt(y.altman_z)) + tile("Statements", c.basis);
+  barChart($("#co-score"), c.years);
+  lineChart($("#co-cash"), c.years, [{ key: "np", label: "Net profit", color: "var(--accent)" }, { key: "cfo", label: "Operating cash flow", color: "var(--med)" }]);
+  const bal = c.years.map((d) => ({ fy: d.fy, dd: d.debtor_days, dp: d.debt_to_assets === null ? null : d.debt_to_assets * 100 }));
+  lineChart($("#co-bal"), bal, [{ key: "dd", label: "Debtor days", color: "var(--high)" }, { key: "dp", label: "Borrowings % of assets", color: "var(--accent)" }], (v) => Math.round(v));
+  $("#co-grid").innerHTML = `<thead><tr><th>Flag</th>${c.years.map((d) => `<th class="n">FY${String(d.fy).slice(2)}</th>`).join("")}</tr></thead><tbody>` +
+    D.flags.map((f) => `<tr><td>${esc(f.label)}</td>${c.years.map((d) => { const v = d.flags[f.key]; return `<td class="c">${v === true ? '<span class="hit" title="Raised">●</span>' : v === false ? '<span class="miss">·</span>' : '<span class="miss" title="Not enough data">n/a</span>'}</td>`; }).join("")}</tr>`).join("") + "</tbody>";
+}
+function openCompany(sym) { current = sym; location.hash = "company"; }
+
+/* ---------- backtest ---------- */
+function renderBacktest() {
+  const b = D.backtest, hits = b.rows.filter((r) => r.score >= D.alertScore).length;
+  $("#bt-tiles").innerHTML = tile(`Blow-ups flagged (score ≥ ${D.alertScore})`, `${hits} / ${b.n_blowups}`) + tile("False alarms in Nifty company-years", Math.round(b.control_false_alarm_rate * 100) + "%") + tile("Average score, blow-ups vs Nifty", `${b.blowup_avg_score.toFixed(1)} vs ${b.control_avg_score.toFixed(1)}`);
+  $("#bt-table").innerHTML = `<thead><tr><th>Company</th><th>Scored on</th><th>Score</th><th>Result</th><th>Flags raised</th><th>What happened</th></tr></thead><tbody>` +
+    b.rows.map((r) => { const c = BY[r.symbol], y = c.years.find((d) => d.fy === r.fy), caught = r.score >= D.alertScore;
+      return `<tr class="click" tabindex="0" data-s="${esc(r.symbol)}"><td class="co">${esc(c.name)}</td><td class="num">FY${r.fy}</td><td>${scorebar(y)}</td><td>${caught ? '<span class="pill High">Caught</span>' : '<span class="pill none">Missed</span>'}</td><td>${chips(y)}</td><td>${esc(c.blowup.event)}</td></tr>`; }).join("") + "</tbody>";
+  $("#bt-rates").innerHTML = Object.entries(b.rates).sort((a, z) => z[1].blowups - a[1].blowups).map(([k, v]) =>
+    `<div class="rate"><span>${esc(FL[k].label)}</span><div class="bars"><div class="bar" style="width:${Math.max(v.blowups * 100, 0.5)}%;background:var(--high)" title="Blow-ups: ${Math.round(v.blowups * 100)}%"></div><div class="bar" style="width:${Math.max(v.controls * 100, 0.5)}%;background:var(--muted)" title="Nifty controls: ${Math.round(v.controls * 100)}%"></div></div></div>`).join("") +
+    `<div class="rate"><span></span><div class="legend"><span>Bar length = share of cases where the flag was raised (full width = 100%)</span></div></div>`;
+}
+$("#bt-table").addEventListener("click", (e) => { const tr = e.target.closest("tr[data-s]"); if (tr) openCompany(tr.dataset.s); });
+
+/* ---------- methodology ---------- */
+function renderMethod() {
+  $("#m-flags").innerHTML = `<thead><tr><th>Flag</th><th class="n">Weight</th><th>What it means</th></tr></thead><tbody>` + D.flags.map((f) => `<tr><td class="co">${esc(f.label)}</td><td class="n">${f.weight}</td><td>${esc(f.why)}</td></tr>`).join("") + "</tbody>";
+  $("#m-text").innerHTML = `<h2>Models</h2>
+<p><b>Beneish M-Score, 8 variables.</b> DSRI, GMI, AQI, SGI, DEPI, LVGI and TATA. SGAI is fixed at 1 because the source data doesn't break out SG&amp;A. A score above ${D.beneishThreshold} puts a company in the likely-manipulator zone. Gross margin uses material cost where reported, otherwise operating margin.</p>
+<p><b>Altman Z'', emerging-market version.</b> 6.56 × WC/TA + 3.26 × RE/TA + 6.72 × EBIT/TA + 1.05 × book equity/total liabilities. Below ${D.altmanDistress} is the distress zone. Working capital is approximated as other assets minus other liabilities, excluding minority interest.</p>
+<h2>Data</h2>
+<ul><li>Annual statements from screener.in. Consolidated where meaningful; standalone for Grasim, M&amp;M, L&amp;T, Bajaj Auto and Nestlé, where lending arms or a short consolidated history distort group numbers.</li>
+<li>Banks, NBFCs, insurers and exchanges are excluded because these ratios don't fit lenders.</li>
+<li>Promoter holding history starts in FY2017, so the promoter flag can't fire for older years. Pledge data isn't in the free source yet.</li>
+<li>Every score uses only that year and earlier years, so the backtest has no look-ahead from the scoring itself. Screener figures may include later restatements.</li></ul>
+<h2>Limitations</h2>
+<p>A screener reads published numbers. It can't see forged bank statements, related-party round-tripping kept off the books, or a promoter pledging shares between filings.</p>`;
+}
+
+/* ---------- routing ---------- */
+const VIEWS = ["screener", "company", "backtest", "method"];
+function route() {
+  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "screener";
+  document.querySelectorAll(".view").forEach((el) => el.classList.toggle("on", el.id === "v-" + v));
+  document.querySelectorAll("nav a").forEach((a) => (a.dataset.v === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+  if (v === "company") renderCompany();
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", route);
+renderScreener(); renderBacktest(); renderMethod(); route();
+</script>
+</body>
+</html>

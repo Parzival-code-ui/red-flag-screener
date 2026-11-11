@@ -57,6 +57,15 @@ python -m screener.fetch TCS INFY   # specific symbols
 
 This writes `data/raw/fetched.jsonl`, which overrides the snapshot.
 
+### Static web version
+
+```bash
+python scripts/export_static.py   # -> dist/index.html
+```
+
+Builds a single self-contained HTML page with all scores precomputed, so you can host or open
+it anywhere without Python (web/template.html is the page template).
+
 ## Layout
 
 ```
