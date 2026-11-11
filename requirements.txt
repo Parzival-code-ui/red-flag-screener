@@ -1,0 +1,7 @@
+pandas>=2.0
+numpy
+streamlit>=1.40
+altair>=5
+requests
+beautifulsoup4
+pytest
